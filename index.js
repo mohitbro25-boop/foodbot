@@ -1,5 +1,6 @@
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
+const QRCode = require('qrcode');
 const cron = require('node-cron');
 const { exec } = require('child_process');
 const path = require('path');
@@ -18,14 +19,30 @@ function log(msg) {
 
 log('Starting bot initialization...');
 
-// Start a basic HTTP health check server for cloud deployment (Koyeb/Render)
+// Store latest QR code for HTTP serving
+let latestQR = null;
+
+// HTTP server: serves QR code image at /qr, health check at /
 const port = process.env.PORT || 8080;
-const server = http.createServer((req, res) => {
-    res.writeHead(200, { 'Content-Type': 'text/plain' });
-    res.end('WhatsApp Food Bot is running!');
+const server = http.createServer(async (req, res) => {
+    if (req.url === '/qr' && latestQR) {
+        try {
+            const imgData = await QRCode.toDataURL(latestQR, { width: 400, margin: 2 });
+            res.writeHead(200, { 'Content-Type': 'text/html' });
+            res.end(`<!DOCTYPE html><html><head><title>WhatsApp QR Code</title><meta http-equiv="refresh" content="10"></head><body style="background:#111;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;margin:0;font-family:sans-serif;color:white"><h2>Scan with WhatsApp → Linked Devices</h2><img src="${imgData}" style="border-radius:12px"/><p style="opacity:0.5">Page auto-refreshes every 10 seconds</p></body></html>`);
+        } catch (e) {
+            res.writeHead(500); res.end('QR generation error');
+        }
+    } else if (req.url === '/qr') {
+        res.writeHead(200, { 'Content-Type': 'text/html' });
+        res.end('<!DOCTYPE html><html><body style="background:#111;color:white;display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif"><h2>Waiting for QR code... Refresh in a few seconds.</h2></body></html>');
+    } else {
+        res.writeHead(200, { 'Content-Type': 'text/plain' });
+        res.end('WhatsApp Food Bot is running! Visit /qr to scan the QR code.');
+    }
 });
 server.listen(port, () => {
-    log(`HTTP health check server listening on port ${port}`);
+    log(`HTTP server listening on port ${port} — visit /qr to scan WhatsApp QR`);
 });
 
 const client = new Client({
@@ -48,9 +65,9 @@ if (fs.existsSync(CHAT_ID_PATH)) {
 }
 
 client.on('qr', (qr) => {
-    log('New QR Code generated.');
+    latestQR = qr;
+    log('New QR Code generated. Open your Railway public URL + /qr to scan it as an image.');
     qrcode.generate(qr, { small: true });
-    log(`Fallback web link: https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qr)}`);
 });
 
 client.on('ready', () => {
