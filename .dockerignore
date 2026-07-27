@@ -1,0 +1,9 @@
+node_modules
+.wwebjs_auth/session/SingletonLock
+.wwebjs_auth/session/Default/SingletonLock
+google_session/SingletonLock
+google_session/Default/SingletonLock
+bot_log.txt
+food_submission_log.txt
+*.mp3
+*.wav

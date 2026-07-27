@@ -1,0 +1,9 @@
+node_modules/
+.wwebjs_auth/
+google_session/
+bot_log.txt
+food_submission_log.txt
+target_chat.json
+*.mp3
+*.wav
+test_form.js
