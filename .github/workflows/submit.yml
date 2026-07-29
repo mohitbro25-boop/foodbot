@@ -8,16 +8,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Submit food form
+        env:
+          COOKIES: ${{ secrets.GOOGLE_COOKIES }}
         run: |
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+          STATUS=$(curl -s -o response.txt -w "%{http_code}" \
             -X POST \
-            -b "${{ secrets.GOOGLE_COOKIES }}" \
-            -d "entry.644673588=Mohit+Sandesh+Desai" \
-            -d "entry.1612255277=SINGLE+TOWER+BOYS" \
-            -d "entry.239864929=Jaynagar" \
-            -d "entry.1606336139=No" \
+            --cookie "$COOKIES" \
+            -H "Content-Type: application/x-www-form-urlencoded" \
+            --data-urlencode "entry.644673588=Mohit Sandesh Desai" \
+            --data-urlencode "entry.1612255277=SINGLE TOWER BOYS" \
+            --data-urlencode "entry.239864929=Jaynagar" \
+            --data-urlencode "entry.1606336139=No" \
             "https://docs.google.com/forms/d/e/1FAIpQLScOts6_-O5PvbxVO17vEcUmKyTVFD6vzSdV5naX0LH6uiko1g/formResponse")
           echo "Response status: $STATUS"
+          head -c 300 response.txt
           if [ "$STATUS" -eq 200 ]; then
             echo "Food form submitted!"
           else
