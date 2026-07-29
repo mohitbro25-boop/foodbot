@@ -35,8 +35,7 @@ jobs:
                 return {
                   name,
                   value: rest.join('='),
-                  domain: '.google.com',
-                  path: '/'
+                  url: 'https://docs.google.com'
                 };
               }).filter(c => c.name);
               await context.addCookies(cookies);
