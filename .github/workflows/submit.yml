@@ -1,7 +1,7 @@
 name: Daily Food Order
 on:
   schedule:
-    - cron: '30 6 * * 1-6'
+    - cron: '0 6 * * 1-6'  # Runs at 11:30 AM IST (Mon-Sat), well before 1:00 PM
   workflow_dispatch: {}
 jobs:
   submit:
@@ -11,17 +11,29 @@ jobs:
         env:
           COOKIES: ${{ secrets.GOOGLE_COOKIES }}
         run: |
-          STATUS=$(curl -s -o response.txt -w "%{http_code}" -L \
-            -X POST \
-            --cookie "$COOKIES" \
-            -H "Content-Type: application/x-www-form-urlencoded" \
-            -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36" \
-            -e "https://docs.google.com/forms/d/e/1FAIpQLScOts6_-O5PvbxVO17vEcUmKyTVFD6vzSdV5naX0LH6uiko1g/viewform" \
+          UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36"
+          VIEW="https://docs.google.com/forms/d/e/1FAIpQLScOts6_-O5PvbxVO17vEcUmKyTVFD6vzSdV5naX0LH6uiko1g/viewform"
+          POST="https://docs.google.com/forms/d/e/1FAIpQLScOts6_-O5PvbxVO17vEcUmKyTVFD6vzSdV5naX0LH6uiko1g/formResponse"
+
+          curl -s --cookie "$COOKIES" -A "$UA" "$VIEW" -o form.html
+
+          FBZX=$(grep -oP '"fbzx":"[^"]*"' form.html | head -1 | grep -oP ':"[^"]*"' | tr -d ':"' || echo "")
+          echo "fbzx=$FBZX"
+          echo "Entry IDs found:"
+          grep -oP 'entry\.\d+' form.html | sort -u
+
+          STATUS=$(curl -s -o response.txt -w "%{http_code}" \
+            -X POST --cookie "$COOKIES" -A "$UA" \
+            -H "Origin: https://docs.google.com" \
+            -e "$VIEW" \
             --data-urlencode "entry.644673588=Mohit Sandesh Desai" \
             --data-urlencode "entry.1612255277=SINGLE TOWER BOYS" \
             --data-urlencode "entry.239864929=Jaynagar" \
             --data-urlencode "entry.1606336139=No" \
-            "https://docs.google.com/forms/d/e/1FAIpQLScOts6_-O5PvbxVO17vEcUmKyTVFD6vzSdV5naX0LH6uiko1g/formResponse")
+            --data-urlencode "fvv=1" \
+            --data-urlencode "pageHistory=0" \
+            --data-urlencode "fbzx=$FBZX" \
+            "$POST")
           echo "Status: $STATUS"
           head -c 500 response.txt
           if [ "$STATUS" -eq 200 ] || [ "$STATUS" -eq 302 ]; then
