@@ -1,44 +1,66 @@
 name: Daily Food Order
 on:
   schedule:
-    - cron: '0 6 * * 1-6'  # Runs at 11:30 AM IST (Mon-Sat), well before 1:00 PM
+    - cron: '30 6 * * 1-6'
   workflow_dispatch: {}
 jobs:
   submit:
     runs-on: ubuntu-latest
     steps:
-      - name: Submit food form
-        env:
-          COOKIES: ${{ secrets.GOOGLE_COOKIES }}
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Setup Node
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+      - name: Install Playwright
         run: |
-          UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36"
-          VIEW="https://docs.google.com/forms/d/e/1FAIpQLScOts6_-O5PvbxVO17vEcUmKyTVFD6vzSdV5naX0LH6uiko1g/viewform"
-          POST="https://docs.google.com/forms/d/e/1FAIpQLScOts6_-O5PvbxVO17vEcUmKyTVFD6vzSdV5naX0LH6uiko1g/formResponse"
-
-          curl -s --cookie "$COOKIES" -A "$UA" "$VIEW" -o form.html
-
-          FBZX=$(grep -oP '"fbzx":"[^"]*"' form.html | head -1 | grep -oP ':"[^"]*"' | tr -d ':"' || echo "")
-          echo "fbzx=$FBZX"
-          echo "Entry IDs found:"
-          grep -oP 'entry\.\d+' form.html | sort -u
-
-          STATUS=$(curl -s -o response.txt -w "%{http_code}" \
-            -X POST --cookie "$COOKIES" -A "$UA" \
-            -H "Origin: https://docs.google.com" \
-            -e "$VIEW" \
-            --data-urlencode "entry.644673588=Mohit+Sandesh+Desai" \
-            --data-urlencode "entry.1612255277=SINGLE+TOWER+BOYS" \
-            --data-urlencode "entry.239864929=Jaynagar" \
-            --data-urlencode "entry.1606336139=No" \
-            --data-urlencode "fvv=1" \
-            --data-urlencode "pageHistory=0" \
-            --data-urlencode "fbzx=$FBZX" \
-            "$POST")
-          echo "Status: $STATUS"
-          head -c 500 response.txt
-          if [ "$STATUS" -eq 200 ] || [ "$STATUS" -eq 302 ]; then
-            echo "Food form submitted!"
-          else
-            echo "Failed: $STATUS"
-            exit 1
-          fi
+          npm init -y
+          npm install playwright
+          npx playwright install chromium
+      - name: Submit form
+        env:
+          GOOGLE_COOKIES: ${{ secrets.GOOGLE_COOKIES }}
+        run: |
+          cat << 'EOF' > submit.js
+          const { chromium } = require('playwright');
+          (async () => {
+            const browser = await chromium.launch();
+            const context = await browser.newContext();
+            
+            const cookiesStr = process.env.GOOGLE_COOKIES;
+            if (cookiesStr) {
+              const cookies = cookiesStr.split(';').map(c => {
+                const [name, ...rest] = c.trim().split('=');
+                return {
+                  name,
+                  value: rest.join('='),
+                  domain: '.google.com',
+                  path: '/'
+                };
+              }).filter(c => c.name);
+              await context.addCookies(cookies);
+            }
+            
+            const page = await context.newPage();
+            await page.goto('https://docs.google.com/forms/d/e/1FAIpQLScOts6_-O5PvbxVO17vEcUmKyTVFD6vzSdV5naX0LH6uiko1g/viewform');
+            await page.waitForSelector('form');
+            
+            const nameInput = await page.$('input[type="text"]');
+            if (nameInput) await nameInput.fill('Mohit Sandesh Desai');
+            
+            const labels = await page.$$('label');
+            for (const label of labels) {
+              const text = await label.innerText();
+              if (text.includes('SINGLE TOWER BOYS') || text.includes('Jaynagar') || (text === 'No' && !text.includes('Yes'))) {
+                await label.click();
+              }
+            }
+            
+            await page.click('//span[contains(text(), "Submit")]');
+            await page.waitForLoadState('networkidle');
+            console.log('Food form submitted!');
+            await browser.close();
+          })();
+          EOF
+          node submit.js
