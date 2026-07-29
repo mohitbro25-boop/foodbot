@@ -26,8 +26,8 @@ jobs:
             -X POST --cookie "$COOKIES" -A "$UA" \
             -H "Origin: https://docs.google.com" \
             -e "$VIEW" \
-            --data-urlencode "entry.644673588=Mohit Sandesh Desai" \
-            --data-urlencode "entry.1612255277=SINGLE TOWER BOYS" \
+            --data-urlencode "entry.644673588=Mohit+Sandesh+Desai" \
+            --data-urlencode "entry.1612255277=SINGLE+TOWER+BOYS" \
             --data-urlencode "entry.239864929=Jaynagar" \
             --data-urlencode "entry.1606336139=No" \
             --data-urlencode "fvv=1" \
