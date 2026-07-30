@@ -1,2 +1,134 @@
-# test code
-runs-on: ubuntu-latest
+name: Daily Food Order
+on:
+  schedule:
+    - cron: '30 6 * * 1-6'
+  workflow_dispatch: {}
+jobs:
+  submit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Setup Node
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+
+      - name: Install Playwright
+        run: |
+          npm init -y
+          npm install playwright
+          npx playwright install --with-deps chromium
+
+      - name: Submit form
+        env:
+          GOOGLE_COOKIES: ${{ secrets.GOOGLE_COOKIES }}
+        run: |
+          cat << 'EOF' > submit.js
+          const { chromium } = require('playwright');
+
+          (async () => {
+            console.log('Starting browser...');
+            const browser = await chromium.launch({ headless: true });
+            const context = await browser.newContext({
+              userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            });
+
+            // Inject cookies if available
+            const cookiesStr = process.env.GOOGLE_COOKIES;
+            if (cookiesStr && cookiesStr.trim()) {
+              console.log('Injecting cookies...');
+              const cookies = cookiesStr.split(';').map(c => {
+                const [name, ...rest] = c.trim().split('=');
+                return { name, value: rest.join('='), domain: '.google.com', path: '/' };
+              }).filter(c => c.name && c.value);
+              await context.addCookies(cookies);
+              console.log(`Injected ${cookies.length} cookies`);
+            } else {
+              console.log('No cookies found, proceeding without auth...');
+            }
+
+            const page = await context.newPage();
+
+            // Navigate with retry
+            const formUrl = 'https://docs.google.com/forms/d/e/1FAIpQLScOts6_-O5PvbxVO17vEcUmKyTVFD6vzSdV5naX0LH6uiko1g/viewform';
+            console.log('Navigating to form:', formUrl);
+            await page.goto(formUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+            
+            // Take screenshot for debugging
+            await page.screenshot({ path: 'before_fill.png' });
+            console.log('Page title:', await page.title());
+            
+            // Wait for form to load
+            try {
+              await page.waitForSelector('form', { timeout: 15000 });
+            } catch (e) {
+              console.error('Form not found! Page content:');
+              console.log(await page.content().then(c => c.substring(0, 2000)));
+              await browser.close();
+              process.exit(1);
+            }
+
+            // Fill name
+            const nameInput = await page.$('input[type="text"]');
+            if (nameInput) {
+              await nameInput.fill('Mohit Sandesh Desai');
+              console.log('Filled name field');
+            } else {
+              console.log('WARNING: Name input not found');
+            }
+
+            // Select options
+            const labels = await page.$$('label, div[role="radio"], div[role="checkbox"]');
+            console.log(`Found ${labels.length} clickable elements`);
+            for (const el of labels) {
+              const text = await el.innerText().catch(() => '');
+              if (
+                text.includes('SINGLE TOWER BOYS') ||
+                text.includes('Jaynagar') ||
+                text.trim() === 'No'
+              ) {
+                console.log('Clicking:', text.trim());
+                await el.click().catch(e => console.log('Click failed:', e.message));
+                await page.waitForTimeout(300);
+              }
+            }
+
+            // Submit
+            console.log('Submitting form...');
+            await page.screenshot({ path: 'before_submit.png' });
+            
+            const submitBtn = await page.$('//span[contains(text(), "Submit")]');
+            if (submitBtn) {
+              await submitBtn.click();
+            } else {
+              // Try alternate selectors
+              await page.click('input[type="submit"], button[type="submit"], [aria-label*="Submit"]').catch(() => {});
+            }
+            
+            await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
+            await page.screenshot({ path: 'after_submit.png' });
+            
+            const finalTitle = await page.title();
+            console.log('Final page title:', finalTitle);
+            
+            if (finalTitle.includes('Thank') || finalTitle.includes('Response') || (await page.url()).includes('formResponse')) {
+              console.log('✅ Form submitted successfully!');
+            } else {
+              console.log('⚠️  Submission may have failed. Check screenshots.');
+            }
+            
+            await browser.close();
+          })();
+          EOF
+          node submit.js
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: form-screenshots
+          path: "*.png"
+          if-no-files-found: ignore
