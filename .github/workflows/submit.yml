@@ -44,7 +44,7 @@ jobs:
                 const [name, ...rest] = c.trim().split('=');
                 return { name, value: rest.join('='), domain: '.google.com', path: '/' };
               }).filter(c => c.name && c.value);
-              await context.addCookies(cookies);
+              try { await context.addCookies(cookies); } catch(e) { console.log("Cookie warning:", e.message); }
               console.log(`Injected ${cookies.length} cookies`);
             } else {
               console.log('No cookies found, proceeding without auth...');
