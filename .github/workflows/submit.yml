@@ -72,12 +72,11 @@ jobs:
             }
 
             // Fill name
-            const nameInput = await page.$('input[type="text"]');
-            if (nameInput) {
-              await nameInput.fill('Mohit Sandesh Desai');
+            try {
+              await page.locator('input[type="text"]:visible').first().fill('Mohit Sandesh Desai', { timeout: 10000 });
               console.log('Filled name field');
-            } else {
-              console.log('WARNING: Name input not found');
+            } catch (e) {
+              console.log('WARNING: Name input fill warning:', e.message);
             }
 
             // Select options
