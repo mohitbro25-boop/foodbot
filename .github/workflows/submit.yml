@@ -90,7 +90,7 @@ jobs:
                 text.trim() === 'No'
               ) {
                 console.log('Clicking:', text.trim());
-                await el.click().catch(e => console.log('Click failed:', e.message));
+                await el.click({ force: true }).catch(e => console.log('Click failed:', e.message));
                 await page.waitForTimeout(300);
               }
             }
@@ -99,13 +99,7 @@ jobs:
             console.log('Submitting form...');
             await page.screenshot({ path: 'before_submit.png' });
             
-            const submitBtn = await page.$('//span[contains(text(), "Submit")]');
-            if (submitBtn) {
-              await submitBtn.click();
-            } else {
-              // Try alternate selectors
-              await page.click('input[type="submit"], button[type="submit"], [aria-label*="Submit"]').catch(() => {});
-            }
+            await page.locator('div[role="button"]:has-text("Submit"), button:has-text("Submit"), span:has-text("Submit")').last().click({ force: true }).catch(() => {});
             
             await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
             await page.screenshot({ path: 'after_submit.png' });
